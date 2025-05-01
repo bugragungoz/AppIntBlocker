@@ -2,10 +2,6 @@
 
 A simple PowerShell script to block or manage internet access for specific applications using Windows Firewall rules. Features an interactive menu, system restore point creation, rule management, and logging.
 
-### Example Screenshot
-
-![Script Execution Example](images/11-script.png) 
-
 ## Features
 
 *   Blocks internet access for specified `.exe`, `.dll`, or other file types within an application's directory.
@@ -46,8 +42,8 @@ A simple PowerShell script to block or manage internet access for specific appli
     ```
 5.  Run the script:
     ```powershell
-    .\YourScriptName.ps1 
-    # Replace YourScriptName.ps1 with the actual script file name
+    .\AppBlocker.ps1 
+    # Replace AppBlocker.ps1 with the actual script file name
     ```
 6.  The script will start and present you with an interactive menu:
     *   It will first ask if you want to create a System Restore Point.
@@ -58,6 +54,19 @@ A simple PowerShell script to block or manage internet access for specific appli
         *   Exit
 7.  Follow the on-screen prompts to select options and provide necessary information (like application name, path, extensions, exclusions).
 
+### Usage Examples (Screenshots)
+
+![Running the script](images/1-running-the-code.png)
+![Asking for system restore point](images/2-asking-for-system-restore-point.png)
+![System Restore Point Created UI](images/3-system-restore.png)
+![Windows Firewall Opened](images/4-firewall-service.png)
+![Entering App Details](images/5-entering-directory-path.png)
+![Rule Creation Process](images/6-creating-rules.png)
+![Testing Blocked App (Permission Denied)](images/7-checking-rules.png)
+![Managing/Removing Rules](images/8-removing-rules.png)
+![Rules Removed Confirmation](images/9-removed-rules.png)
+![Testing Unblocked App](images/10-checking-removed-rules.png)
+
 ## Logging
 The script creates a log file named `AppBlocker.log` in the same directory where the script is run. This file records the actions performed and any errors encountered.
 
@@ -66,4 +75,4 @@ This script was developed with assistance from AI models: Claude 3.7 Sonnet and 
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE). 
