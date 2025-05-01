@@ -66,5 +66,4 @@ This script was developed with assistance from AI models: Claude 3.7 Sonnet and 
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE). 
-# Ensure you have a LICENSE file in your repository with the MIT License text.
+This project is licensed under the [MIT License](LICENSE).
