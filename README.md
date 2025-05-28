@@ -1,4 +1,4 @@
-# Application Internet Blocker TEST
+# Application Internet Blocker
 
 A simple PowerShell script to block or manage internet access for specific applications using Windows Firewall rules. Features an interactive menu, system restore point creation, rule management, and logging.
 
