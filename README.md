@@ -86,3 +86,5 @@ responsible for misuse.
 [MIT](LICENSE)
 
 This script was developed with assistance from AI models: Claude 3.7 Sonnet and Gemini 2.5 Pro Preview.
+
+It was later revised and updated with Claude Opus 5.5.
