@@ -180,6 +180,7 @@ function Block-Application {
         return $false
     }
 
+    $rootPath = (Get-Item -Path $ApplicationPath).FullName
     Write-Host "`nScanning directory '$ApplicationPath' (and subdirectories) for .exe files..." -ForegroundColor $infoColor
 
     $filesToProcess = @()
@@ -259,8 +260,14 @@ function Block-Application {
         $percentComplete = [math]::Round(($currentFileIndex / $totalFilesToBlock) * 100)
         Write-Progress -Activity "Creating rules for '$($ApplicationName)'" -Status "$percentComplete% Complete" -PercentComplete $percentComplete -CurrentOperation "Processing: $($file.Name)"
 
-        # Use the consistent prefix + App Name + File Name
-        $baseRuleName = "$($RuleNamePrefix)$($ApplicationName) - $($file.Name)"
+        # Use the consistent prefix + App Name + the file's path inside the application folder, so
+        # files with the same name in different subfolders (x86\setup.exe, x64\setup.exe) each get
+        # their own rules. Files directly in the folder keep the plain file name.
+        $relativePath = $file.Name
+        if ($file.FullName.StartsWith($rootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $relativePath = $file.FullName.Substring($rootPath.Length).TrimStart('\', '/')
+        }
+        $baseRuleName = "$($RuleNamePrefix)$($ApplicationName) - $relativePath"
         if ($baseRuleName.Length -gt 220) { $baseRuleName = $baseRuleName.Substring(0, 220) + "..." }
 
         Write-Host "Processing: $($file.FullName)" -ForegroundColor $processColor
