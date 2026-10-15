@@ -6,6 +6,11 @@
 # by creating/removing Windows Firewall rules. Includes options for
 # system restore points and logging.
 #
+# Only .exe files are blocked. Windows Firewall matches a program rule
+# against the executable of the process that owns the connection; a
+# DLL runs inside such a process, so a rule for a .dll never matches
+# any traffic.
+#
 # INTENDED USE CASES:
 # - Enhancing privacy, reducing bandwidth, improving performance.
 # - Blocking distracting updates/notifications.
@@ -149,19 +154,18 @@ function Remove-ExistingRule {
     }
 }
 
-# Blocks internet access for files in the specified directory
+# Blocks internet access for the .exe files in the specified directory
 function Block-Application {
     param (
         [Parameter(Mandatory=$true)]
         [string]$ApplicationPath,
         [Parameter(Mandatory=$true)]
         [string]$ApplicationName, # This name is used in the rule DisplayName
-        [string[]]$FileExtensions = @("*.exe", "*.dll"),
         [string[]]$ExcludedKeywords = @(),
         [string[]]$ExcludedFiles = @()
     )
 
-    Write-Log -Message "Starting blocking process for App: '$ApplicationName', Path: '$ApplicationPath', Ext: $($FileExtensions -join ', '), ExcludedKeywords: $($ExcludedKeywords -join ', '), ExcludedFiles: $($ExcludedFiles -join ', ')"
+    Write-Log -Message "Starting blocking process for App: '$ApplicationName', Path: '$ApplicationPath', ExcludedKeywords: $($ExcludedKeywords -join ', '), ExcludedFiles: $($ExcludedFiles -join ', ')"
 
     # Validate the directory path
     if (-not (Test-Path -Path $ApplicationPath -PathType Container)) {
@@ -171,14 +175,11 @@ function Block-Application {
         return $false
     }
 
-    Write-Host "`nScanning directory '$ApplicationPath' (and subdirectories)..." -ForegroundColor $infoColor
-    Write-Host "File extensions to block: $($FileExtensions -join ', ')" -ForegroundColor $infoColor
+    Write-Host "`nScanning directory '$ApplicationPath' (and subdirectories) for .exe files..." -ForegroundColor $infoColor
 
     $filesToProcess = @()
     try {
-        foreach ($ext in $FileExtensions) {
-            $filesToProcess += Get-ChildItem -Path $ApplicationPath -Recurse -Filter $ext -File -ErrorAction SilentlyContinue
-        }
+        $filesToProcess = @(Get-ChildItem -Path $ApplicationPath -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue)
     }
     catch {
          $errMsg = "An error occurred during file scanning in '$ApplicationPath': $($_.Exception.Message)"
@@ -188,13 +189,13 @@ function Block-Application {
     }
 
     if ($filesToProcess.Count -eq 0) {
-        $warnMsg = "No files matching the specified extensions found in '$ApplicationPath'."
+        $warnMsg = "No .exe files found in '$ApplicationPath'."
         Write-Warning $warnMsg
         Write-Log -Message $warnMsg -Level "WARN"
         return $true
     }
 
-    Write-Host "Found $($filesToProcess.Count) total matching file(s)." -ForegroundColor $infoColor
+    Write-Host "Found $($filesToProcess.Count) .exe file(s)." -ForegroundColor $infoColor
     Write-Log -Message "Found $($filesToProcess.Count) potential files to process for '$ApplicationName'."
 
     # Filter files based on exclusions
@@ -469,16 +470,6 @@ try {
                     elseif (-not (Test-Path -Path $inputAppPath -PathType Container)) { Write-Warning "Path '$inputAppPath' not found or is not a directory." }
                 }
 
-                $defaultExtensions = "*.exe,*.dll"
-                $extensionsInput = Read-Host -Prompt " Enter file extensions to block (default: $defaultExtensions), separate with commas, or press Enter"
-                $inputFileExtensions = @("*.exe", "*.dll")
-                if ($extensionsInput.Trim()) {
-                    $parsedExtensions = $extensionsInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -like '*.*' }
-                    if ($parsedExtensions.Count -gt 0) { $inputFileExtensions = $parsedExtensions }
-                    else { Write-Warning "Invalid format. Using default extensions ($defaultExtensions)." }
-                }
-                Write-Host " Using extensions: $($inputFileExtensions -join ', ')" -ForegroundColor $infoColor
-
                 $inputExcludedKeywords = @()
                 $inputExcludedFiles = @()
                 $useExclusions = Read-Host -Prompt " Specify files or keywords to exclude from blocking? (Y/N)"
@@ -495,7 +486,7 @@ try {
 
                 # --- Execute Blocking Process ---
                 Remove-ExistingRule -ApplicationName $inputAppName
-                Block-Application -ApplicationPath $inputAppPath -ApplicationName $inputAppName -FileExtensions $inputFileExtensions -ExcludedKeywords $inputExcludedKeywords -ExcludedFiles $inputExcludedFiles
+                Block-Application -ApplicationPath $inputAppPath -ApplicationName $inputAppName -ExcludedKeywords $inputExcludedKeywords -ExcludedFiles $inputExcludedFiles
             }
             "2" {
                 Show-RuleManager
