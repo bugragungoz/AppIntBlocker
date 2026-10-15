@@ -59,6 +59,22 @@ function Write-Log {
     }
 }
 
+# Returns the firewall rules created by this script, optionally only those of one application.
+# The application is matched here instead of in the query, so [ and ] in its name are not
+# read as wildcards.
+function Get-BlockRule {
+    param (
+        [string]$ApplicationName
+    )
+
+    $rules = @(Get-NetFirewallRule -DisplayName "$($RuleNamePrefix)*" -ErrorAction SilentlyContinue)
+    if ($ApplicationName) {
+        $appPrefix = "$($RuleNamePrefix)$($ApplicationName) - "
+        $rules = @($rules | Where-Object { $_.DisplayName.StartsWith($appPrefix, [System.StringComparison]::OrdinalIgnoreCase) })
+    }
+    return $rules
+}
+
 # Creates a Windows Firewall rule for a specific file
 function New-BlockRule {
     param (
@@ -70,14 +86,6 @@ function New-BlockRule {
         [ValidateSet("Inbound", "Outbound")]
         [string]$Direction
     )
-
-    # Check if a rule with this exact name already exists
-    if (Get-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue) {
-        $logMsg = "Skipping: Rule '$DisplayName' already exists for '$FilePath'."
-        Write-Host "  $logMsg" -ForegroundColor $processColor
-        Write-Log -Message $logMsg -Level "DEBUG"
-        return $true # Consider existing rule as success for this operation
-    }
 
     try {
         New-NetFirewallRule -DisplayName $DisplayName -Direction $Direction -Program $FilePath -Action Block -Profile Any -Enabled True -ErrorAction Stop | Out-Null
@@ -107,10 +115,7 @@ function Remove-ExistingRule {
 
     $existingRules = @()
     try {
-        # Use DisplayName filter directly for efficiency if possible, otherwise pipe Where-Object
-        $existingRules = Get-NetFirewallRule -DisplayName "$rulePattern" -ErrorAction SilentlyContinue
-        # If the above returns nothing or errors, fallback might be needed, but this is often faster
-        # $existingRules = Get-NetFirewallRule | Where-Object { $_.DisplayName -like $rulePattern } -ErrorAction Stop
+        $existingRules = @(Get-BlockRule -ApplicationName $ApplicationName)
     }
     catch {
          $errMsg = "An error occurred while retrieving firewall rules: $($_.Exception.Message)"
@@ -244,6 +249,11 @@ function Block-Application {
     Write-Host "`nCreating firewall rules..." -ForegroundColor $infoColor
     Write-Log -Message "Starting firewall rule creation for $($filesToBlock.Count) files for '$ApplicationName'."
 
+    # Read the application's existing rules once, rather than querying the firewall for every
+    # rule name in the loop below
+    $existingRuleNames = @{}
+    foreach ($rule in @(Get-BlockRule -ApplicationName $ApplicationName)) { $existingRuleNames[$rule.DisplayName] = $true }
+
     foreach ($file in $filesToBlock) {
         $currentFileIndex++
         $percentComplete = [math]::Round(($currentFileIndex / $totalFilesToBlock) * 100)
@@ -255,13 +265,23 @@ function Block-Application {
 
         Write-Host "Processing: $($file.FullName)" -ForegroundColor $processColor
 
-        $inboundRuleName = "$($baseRuleName) (Inbound)"
-        $inboundSuccess = New-BlockRule -FilePath $file.FullName -DisplayName $inboundRuleName -Direction "Inbound"
+        $fileFailed = $false
+        foreach ($direction in @("Inbound", "Outbound")) {
+            $ruleName = "$($baseRuleName) ($direction)"
+            if ($existingRuleNames.ContainsKey($ruleName)) {
+                $logMsg = "Skipping: Rule '$ruleName' already exists for '$($file.FullName)'."
+                Write-Host "  $logMsg" -ForegroundColor $processColor
+                Write-Log -Message $logMsg -Level "DEBUG"
+            }
+            elseif (New-BlockRule -FilePath $file.FullName -DisplayName $ruleName -Direction $direction) {
+                $existingRuleNames[$ruleName] = $true
+            }
+            else {
+                $fileFailed = $true
+            }
+        }
 
-        $outboundRuleName = "$($baseRuleName) (Outbound)"
-        $outboundSuccess = New-BlockRule -FilePath $file.FullName -DisplayName $outboundRuleName -Direction "Outbound"
-
-        if ($inboundSuccess -and $outboundSuccess) {
+        if (-not $fileFailed) {
             $successRuleCount++
         } else {
             $errorFileCount++
