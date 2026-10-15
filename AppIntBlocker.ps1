@@ -121,7 +121,7 @@ function Remove-ExistingRule {
          $errMsg = "An error occurred while retrieving firewall rules: $($_.Exception.Message)"
          Write-Warning $errMsg
          Write-Log -Message $errMsg -Level "ERROR"
-         return $false
+         return
     }
 
     $ruleCount = $existingRules.Count
@@ -138,24 +138,24 @@ function Remove-ExistingRule {
                 $existingRules | Remove-NetFirewallRule -ErrorAction Stop
                 Write-Host "Successfully removed $ruleCount rule(s)." -ForegroundColor $successColor
                 Write-Log -Message "Successfully removed $ruleCount rules for '$ApplicationName'."
-                return $true
+                return
             }
             catch {
                  $errMsg = "An error occurred while removing rules for '$ApplicationName': $($_.Exception.Message)"
                  Write-Warning $errMsg
                  Write-Log -Message $errMsg -Level "ERROR"
                  Write-Warning "Some rules might not have been removed. Please check Windows Firewall manually."
-                 return $false # Indicate removal failed
+                 return
             }
         } else {
             Write-Host "Keeping existing rules." -ForegroundColor $warningColor
             Write-Log -Message "User chose to keep existing rules for '$ApplicationName'."
-            return $false # Indicate rules were not removed
+            return
         }
     } else {
         Write-Host "No existing rules found matching the pattern for '$ApplicationName'." -ForegroundColor $infoColor
         Write-Log -Message "No existing rules found for '$ApplicationName'."
-        return $false # Indicate no rules needed removal
+        return
     }
 }
 
@@ -177,7 +177,7 @@ function Block-Application {
         $errMsg = "ERROR: The specified path '$ApplicationPath' was not found or is not a valid directory."
         Write-Host $errMsg -ForegroundColor $errorColor
         Write-Log -Message $errMsg -Level "ERROR"
-        return $false
+        return
     }
 
     $rootPath = (Get-Item -Path $ApplicationPath).FullName
@@ -191,14 +191,14 @@ function Block-Application {
          $errMsg = "An error occurred during file scanning in '$ApplicationPath': $($_.Exception.Message)"
          Write-Warning $errMsg
          Write-Log -Message $errMsg -Level "ERROR"
-         return $false
+         return
     }
 
     if ($filesToProcess.Count -eq 0) {
         $warnMsg = "No .exe files found in '$ApplicationPath'."
         Write-Warning $warnMsg
         Write-Log -Message $warnMsg -Level "WARN"
-        return $true
+        return
     }
 
     Write-Host "Found $($filesToProcess.Count) .exe file(s)." -ForegroundColor $infoColor
@@ -238,7 +238,7 @@ function Block-Application {
              Write-Host "`nSkipped files:" -ForegroundColor $infoColor
              $filesToSkip | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor $processColor }
         }
-        return $true
+        return
     }
 
     # --- Create Firewall Rules ---
@@ -313,8 +313,6 @@ function Block-Application {
         Write-Host "`nThe following files were skipped based on exclusion criteria:" -ForegroundColor $infoColor
         $filesToSkip | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor $processColor }
     }
-
-    return $true
 }
 
 # Function to manage (list and remove) firewall rules created by this script
