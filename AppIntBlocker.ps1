@@ -379,8 +379,10 @@ function Show-RuleManager {
         }
         "S" {
             $appChoice = Read-Host -Prompt "Enter the NUMBER of the application whose rules you want to remove"
-            if ($appMap.ContainsKey([int]$appChoice)) {
-                $appNameToRemove = $appMap[[int]$appChoice]
+            # TryParse instead of an [int] cast: the cast throws on input like "a", which ended the script
+            $appNumber = 0
+            if ([int]::TryParse($appChoice, [ref]$appNumber) -and $appMap.ContainsKey($appNumber)) {
+                $appNameToRemove = $appMap[$appNumber]
                 $rulesToRemove = $scriptRules | Where-Object { $_.DisplayName -match "^$([regex]::Escape($RuleNamePrefix))$([regex]::Escape($appNameToRemove))\s+-" }
 
                 if ($rulesToRemove.Count -gt 0) {
