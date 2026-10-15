@@ -4,7 +4,7 @@
 # DESCRIPTION:
 # This script blocks or manages internet access for executable files
 # by creating/removing Windows Firewall rules. Includes options for
-# system restore points and logging.
+# backing up the firewall rules and logging.
 #
 # Only .exe files are blocked. Windows Firewall matches a program rule
 # against the executable of the process that owns the connection; a
@@ -73,6 +73,26 @@ function Get-BlockRule {
         $rules = @($rules | Where-Object { $_.DisplayName.StartsWith($appPrefix, [System.StringComparison]::OrdinalIgnoreCase) })
     }
     return $rules
+}
+
+# Exports the whole Windows Firewall policy to a .wfw file next to the script and returns its path,
+# or nothing if the export failed. The script only changes firewall rules, so this file is enough to
+# undo everything it does: netsh advfirewall import restores it.
+function Backup-FirewallPolicy {
+    $backupPath = Join-Path -Path $PSScriptRoot -ChildPath "FirewallBackup-$(Get-Date -Format 'yyyyMMdd-HHmmss').wfw"
+    try {
+        $netshOutput = & netsh.exe advfirewall export $backupPath 2>&1
+        if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $backupPath)) {
+            Write-Log -Message "Firewall policy exported to '$backupPath'."
+            return $backupPath
+        }
+        $errMsg = "Failed to back up the firewall rules to '$backupPath'. netsh said: $(($netshOutput | Out-String).Trim())"
+    }
+    catch {
+        $errMsg = "Failed to back up the firewall rules to '$backupPath'. Error: $($_.Exception.Message)"
+    }
+    Write-Warning $errMsg
+    Write-Log -Message $errMsg -Level "ERROR"
 }
 
 # Creates a Windows Firewall rule for a specific file
@@ -435,42 +455,30 @@ try {
     Write-Host "YOU ARE SOLELY RESPONSIBLE FOR YOUR USE OF THIS SCRIPT." -ForegroundColor $warningColor
     Write-Host "---------------------------------------------------------------" -ForegroundColor $infoColor
 
-    # --- Offer to create a System Restore Point ---
-    $askCreateRestorePoint = Read-Host -Prompt "Do you want to ATTEMPT creating a System Restore Point before proceeding? (Recommended: Y/N)"
-    if ($askCreateRestorePoint -match '^y') {
-        Write-Host "Attempting to create System Restore Point... (this may take a moment)" -ForegroundColor $infoColor
-        Write-Log -Message "User requested System Restore Point creation attempt."
-        try {
-            # Checkpoint-Computer starts the Volume Shadow Copy service itself if needed. Windows
-            # creates at most one restore point per 24 hours by default; within that window the
-            # cmdlet only writes a warning and creates nothing, so the warning is checked here.
-            $restoreWarnings = @()
-            Checkpoint-Computer -Description "Before AppBlocker script execution $(Get-Date)" -ErrorAction Stop -WarningAction SilentlyContinue -WarningVariable restoreWarnings
-            if ($restoreWarnings.Count -gt 0) {
-                $warnMsg = "No new System Restore Point was created: $($restoreWarnings[0].Message)"
-                Write-Warning $warnMsg
-                Write-Log -Message $warnMsg -Level "WARN"
-            } else {
-                Write-Host "System Restore Point created successfully." -ForegroundColor $successColor
-                Write-Log -Message "System Restore Point created successfully."
-            }
-        } catch {
-            $errMsg = "Failed to create System Restore Point. Error: $($_.Exception.Message). Please ensure System Restore is enabled and functional for your system drive (VSS service might be disabled or unable to start)."
-            Write-Warning $errMsg
-            Write-Log -Message $errMsg -Level "ERROR"
-            # Let the user continue even without a restore point
-            $continueAnyway = Read-Host -Prompt "Could not create restore point. Continue with the script anyway? (Y/N)"
+    # --- Offer to back up the firewall rules ---
+    $askBackup = Read-Host -Prompt "Back up the current Windows Firewall rules before proceeding? (Recommended: Y/N)"
+    if ($askBackup -match '^y') {
+        Write-Host "Backing up the Windows Firewall rules..." -ForegroundColor $infoColor
+        Write-Log -Message "User requested a firewall backup."
+        $backupPath = Backup-FirewallPolicy
+        if ($backupPath) {
+            Write-Host "Firewall rules backed up to: $backupPath" -ForegroundColor $successColor
+            Write-Host "To restore them, run as administrator (this replaces ALL current firewall rules with the backup):" -ForegroundColor $infoColor
+            Write-Host "  netsh advfirewall import `"$backupPath`"" -ForegroundColor $infoColor
+        } else {
+            # Let the user continue even without a backup
+            $continueAnyway = Read-Host -Prompt "Could not back up the firewall rules. Continue with the script anyway? (Y/N)"
             if (-not ($continueAnyway -match '^y')) {
-                 Write-Log -Message "User chose to exit after failed restore point creation."
+                 Write-Log -Message "User chose to exit after the firewall backup failed."
                  exit 1
             }
-            Write-Log -Message "User chose to continue after failed restore point creation."
+            Write-Log -Message "User chose to continue after the firewall backup failed."
         }
     } else {
-         Write-Host "Skipping System Restore Point creation." -ForegroundColor $warningColor
-         Write-Log -Message "User skipped System Restore Point creation."
+         Write-Host "Skipping firewall backup." -ForegroundColor $warningColor
+         Write-Log -Message "User skipped the firewall backup."
     }
-    # --- End: System Restore Point ---
+    # --- End: Firewall backup ---
 
 
     # --- Main Menu Loop ---
