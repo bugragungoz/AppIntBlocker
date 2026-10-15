@@ -55,7 +55,7 @@ function Write-Log {
 }
 
 # Creates a Windows Firewall rule for a specific file
-function Create-FirewallRule {
+function New-BlockRule {
     param (
         [Parameter(Mandatory=$true)]
         [string]$FilePath,
@@ -89,7 +89,7 @@ function Create-FirewallRule {
 }
 
 # Removes existing firewall rules matching the application name pattern
-function Remove-ExistingRules {
+function Remove-ExistingRule {
     param (
         [Parameter(Mandatory=$true)]
         [string]$ApplicationName # Used to build the display name pattern
@@ -150,7 +150,7 @@ function Remove-ExistingRules {
 }
 
 # Blocks internet access for files in the specified directory
-function Block-ApplicationFiles {
+function Block-Application {
     param (
         [Parameter(Mandatory=$true)]
         [string]$ApplicationPath,
@@ -255,17 +255,17 @@ function Block-ApplicationFiles {
         Write-Host "Processing: $($file.FullName)" -ForegroundColor $processColor
 
         $inboundRuleName = "$($baseRuleName) (Inbound)"
-        $inboundSuccess = Create-FirewallRule -FilePath $file.FullName -DisplayName $inboundRuleName -Direction "Inbound"
+        $inboundSuccess = New-BlockRule -FilePath $file.FullName -DisplayName $inboundRuleName -Direction "Inbound"
 
         $outboundRuleName = "$($baseRuleName) (Outbound)"
-        $outboundSuccess = Create-FirewallRule -FilePath $file.FullName -DisplayName $outboundRuleName -Direction "Outbound"
+        $outboundSuccess = New-BlockRule -FilePath $file.FullName -DisplayName $outboundRuleName -Direction "Outbound"
 
         if ($inboundSuccess -and $outboundSuccess) {
             $successRuleCount++
         } else {
             $errorFileCount++
             Write-Warning "  -> Failed to create one or both rules for: $($file.Name)"
-            # Specific errors logged within Create-FirewallRule
+            # Specific errors logged within New-BlockRule
         }
     }
 
@@ -290,7 +290,7 @@ function Block-ApplicationFiles {
 }
 
 # Function to manage (list and remove) firewall rules created by this script
-function Manage-FirewallRules {
+function Show-RuleManager {
     Write-Host "`n--- Manage Firewall Rules ---" -ForegroundColor $titleColor
     Write-Log -Message "Entered rule management function."
 
@@ -494,11 +494,11 @@ try {
                 }
 
                 # --- Execute Blocking Process ---
-                Remove-ExistingRules -ApplicationName $inputAppName
-                Block-ApplicationFiles -ApplicationPath $inputAppPath -ApplicationName $inputAppName -FileExtensions $inputFileExtensions -ExcludedKeywords $inputExcludedKeywords -ExcludedFiles $inputExcludedFiles
+                Remove-ExistingRule -ApplicationName $inputAppName
+                Block-Application -ApplicationPath $inputAppPath -ApplicationName $inputAppName -FileExtensions $inputFileExtensions -ExcludedKeywords $inputExcludedKeywords -ExcludedFiles $inputExcludedFiles
             }
             "2" {
-                Manage-FirewallRules
+                Show-RuleManager
             }
             "3" {
                 Write-Host "Opening Windows Firewall with Advanced Security (wf.msc)..." -ForegroundColor $infoColor
