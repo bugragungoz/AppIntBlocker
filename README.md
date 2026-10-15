@@ -1,78 +1,91 @@
-# Application Internet Blocker
+# AppIntBlocker
 
-A simple PowerShell script to block or manage internet access for specific applications using Windows Firewall rules. Features an interactive menu, system restore point creation, rule management, and logging.
+A PowerShell script that blocks an application's internet access on Windows. You give it the
+application's folder; it adds a Windows Firewall rule for every `.exe` in it, and removes those rules
+again when you ask. Nothing to install, no third-party tools.
 
-## Features
+![PuTTY after being blocked: "Network error: Permission denied"](images/7-checking-rules.png)
 
-*   Blocks internet access for specified `.exe`, `.dll`, or other file types within an application's directory.
-*   Manages firewall rules created by this script (list, remove all, remove specific application's rules).
-*   Offers to create a **System Restore Point** before making changes (recommended).
-*   Provides a shortcut to open **Windows Firewall with Advanced Security**.
-*   Logs actions and errors to a local file (`AppBlocker.log`).
-*   Uses built-in Windows Firewall (no third-party tools needed).
-*   Easy-to-use interactive menu system.
-*   **General-purpose:** Does not target specific software or interfere with licensing.
+## Usage
+
+You need Windows 10 or 11 and an administrator account.
+
+1. Download [`AppIntBlocker.ps1`](AppIntBlocker.ps1): open the file and click **Download raw file**.
+2. Right-click the Start button and open **Terminal (Admin)** (on Windows 10: **Windows PowerShell (Admin)**).
+3. Run the script from the folder you saved it to:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File "$HOME\Downloads\AppIntBlocker.ps1"
+   ```
+
+   `-ExecutionPolicy Bypass` lets this one run start; it changes no setting on your computer.
+4. The script offers to create a System Restore Point (optional), then shows its menu:
+
+| Option | What it does |
+| --- | --- |
+| **1** Block Internet Access for an Application | Asks for a name and the application's folder, then blocks every `.exe` in that folder and its subfolders. |
+| **2** Manage/Remove Existing Firewall Rules | Lists the applications you blocked and removes the rules of one (**S**) or all of them (**A**). |
+| **3** Open Windows Firewall with Advanced Security | Opens `wf.msc`. The script's rules are under Inbound and Outbound Rules, named `AppBlocker Rule -...`. |
+| **4** Exit | |
+
+### Example
+
+Blocking an application installed in `C:\Program Files\Example`:
+
+```text
+Enter your choice (1-4): 1
+ Enter a unique name for this application (e.g., 'My Drawing App'): Example
+ Enter the main installation directory path (e.g., C:\Program Files\MyApp): C:\Program Files\Example
+ Specify files or keywords to exclude from blocking? (Y/N): N
+```
+
+To find an application's folder, right-click its desktop shortcut and choose **Open file location**.
+To give the application its internet access back, run the script again and choose **2**, then **S** and
+the application's number.
+
+<details>
+<summary>Screenshots of a full run</summary>
+
+Entering the application's name and folder:
+![Entering the application's name and folder](images/5-entering-directory-path.png)
+
+The optional restore point prompt, and the restore point in System Restore:
+![Restore point prompt](images/2-asking-for-system-restore-point.png)
+![Restore point listed in System Restore](images/3-system-restore.png)
+
+Option 3 opens Windows Firewall with Advanced Security:
+![Windows Firewall with Advanced Security](images/4-firewall-service.png)
+
+Option 2 lists the blocked applications and removes their rules:
+![Rule manager](images/8-removing-rules.png)
+![Rules removed](images/9-removed-rules.png)
+
+After the rules are removed, the application connects again:
+![PuTTY connecting again](images/10-checking-removed-rules.png)
+
+</details>
+
+## How it works
+
+Windows Firewall matches a rule to the program file of the process that opens a connection, which is
+an `.exe`. The script adds two block rules, inbound and outbound, for each `.exe` in the folder. DLL
+files run inside those programs, so they need no rules of their own.
+
+- **Only firewall rules change.** Option 2 removes everything the script added, so the restore point
+  is a precaution, not a requirement. Windows creates at most one such restore point every 24 hours;
+  when it skips one, the script says so.
+- **Logging:** every action and error goes to `AppBlocker.log` next to the script.
+- **Limit:** an application that goes online through another program, such as a browser it opens or an
+  updater installed in a different folder, needs that program blocked as well.
 
 ## Disclaimer
 
-*   Use this script responsibly and legally.
-*   Intended for personal, educational, or administrative tasks where you have permission to modify network access.
-*   This script **does not** crack, patch, or bypass any software licensing.
-*   The author is not responsible for any misuse.
-
-## Requirements
-
-*   Windows 10 / Windows 11 or later
-*   PowerShell 5.1+
-*   **Run as Administrator** (required for Firewall and System Restore changes).
-*   System Restore must be enabled on your system drive for the restore point feature to work.
-
-## How to Use
-
-1.  Download the script (`.ps1` file) to your computer.
-2.  Open **PowerShell as Administrator**.
-3.  Navigate to the directory where you saved the script using the `cd` command:
-    ```powershell
-    cd "C:\path\to\your\script" 
-    # Replace C:\path\to\your\script with the actual path
-    ```
-4.  (Optional, only if you encounter an error) Allow script execution for the current session:
-    ```powershell
-    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-    ```
-5.  Run the script:
-    ```powershell
-    .\AppBlocker.ps1 
-    # Replace AppBlocker.ps1 with the actual script file name
-    ```
-6.  The script will start and present you with an interactive menu:
-    *   It will first ask if you want to create a System Restore Point.
-    *   Then, the main menu will appear with options like:
-        *   Block Internet Access for an Application
-        *   Manage/Remove Existing Firewall Rules
-        *   Open Windows Firewall with Advanced Security
-        *   Exit
-7.  Follow the on-screen prompts to select options and provide necessary information (like application name, path, extensions, exclusions).
-
-### Usage Examples (Screenshots)
-
-![Running the script](images/1-running-the-code.png)
-![Asking for system restore point](images/2-asking-for-system-restore-point.png)
-![System Restore Point Created UI](images/3-system-restore.png)
-![Windows Firewall Opened](images/4-firewall-service.png)
-![Entering App Details](images/5-entering-directory-path.png)
-![Rule Creation Process](images/6-creating-rules.png)
-![Testing Blocked App (Permission Denied)](images/7-checking-rules.png)
-![Managing/Removing Rules](images/8-removing-rules.png)
-![Rules Removed Confirmation](images/9-removed-rules.png)
-![Testing Unblocked App](images/10-checking-removed-rules.png)
-
-## Logging
-The script creates a log file named `AppBlocker.log` in the same directory where the script is run. This file records the actions performed and any errors encountered.
-
-## AI Assistance
-This script was developed with assistance from AI models: Claude 3.7 Sonnet and Gemini 2.5 Pro Preview.
+Use this script only on computers you are allowed to manage. It adds and removes Windows Firewall rules
+and nothing else: it does not modify, patch or bypass the licensing of any software. The author is not
+responsible for misuse.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE). 
+[MIT](LICENSE)
+
+This script was developed with assistance from AI models: Claude 3.7 Sonnet and Gemini 2.5 Pro Preview.
