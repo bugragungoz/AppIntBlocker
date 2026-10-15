@@ -173,19 +173,19 @@ function Block-Application {
     Write-Log -Message "Starting blocking process for App: '$ApplicationName', Path: '$ApplicationPath', ExcludedKeywords: $($ExcludedKeywords -join ', '), ExcludedFiles: $($ExcludedFiles -join ', ')"
 
     # Validate the directory path
-    if (-not (Test-Path -Path $ApplicationPath -PathType Container)) {
+    if (-not (Test-Path -LiteralPath $ApplicationPath -PathType Container)) {
         $errMsg = "ERROR: The specified path '$ApplicationPath' was not found or is not a valid directory."
         Write-Host $errMsg -ForegroundColor $errorColor
         Write-Log -Message $errMsg -Level "ERROR"
         return
     }
 
-    $rootPath = (Get-Item -Path $ApplicationPath).FullName
+    $rootPath = (Get-Item -LiteralPath $ApplicationPath).FullName
     Write-Host "`nScanning directory '$ApplicationPath' (and subdirectories) for .exe files..." -ForegroundColor $infoColor
 
     $filesToProcess = @()
     try {
-        $filesToProcess = @(Get-ChildItem -Path $ApplicationPath -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue)
+        $filesToProcess = @(Get-ChildItem -LiteralPath $ApplicationPath -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue)
     }
     catch {
          $errMsg = "An error occurred during file scanning in '$ApplicationPath': $($_.Exception.Message)"
@@ -498,10 +498,11 @@ try {
                 }
 
                 $inputAppPath = ""
-                while (-not $inputAppPath -or -not (Test-Path -Path $inputAppPath -PathType Container)) {
-                    $inputAppPath = Read-Host -Prompt " Enter the main installation directory path (e.g., C:\Program Files\MyApp)"
+                while (-not $inputAppPath -or -not (Test-Path -LiteralPath $inputAppPath -PathType Container)) {
+                    # Drop the quotes that Explorer's "Copy as path" puts around the path
+                    $inputAppPath = (Read-Host -Prompt " Enter the main installation directory path (e.g., C:\Program Files\MyApp)").Trim().Trim('"')
                     if (-not $inputAppPath) { Write-Warning "Directory path cannot be empty." }
-                    elseif (-not (Test-Path -Path $inputAppPath -PathType Container)) { Write-Warning "Path '$inputAppPath' not found or is not a directory." }
+                    elseif (-not (Test-Path -LiteralPath $inputAppPath -PathType Container)) { Write-Warning "Path '$inputAppPath' not found or is not a directory." }
                 }
 
                 $inputExcludedKeywords = @()
