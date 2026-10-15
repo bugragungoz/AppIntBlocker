@@ -436,17 +436,24 @@ try {
     Write-Host "---------------------------------------------------------------" -ForegroundColor $infoColor
 
     # --- Offer to create a System Restore Point ---
-    $restorePointCreated = $false
     $askCreateRestorePoint = Read-Host -Prompt "Do you want to ATTEMPT creating a System Restore Point before proceeding? (Recommended: Y/N)"
     if ($askCreateRestorePoint -match '^y') {
         Write-Host "Attempting to create System Restore Point... (this may take a moment)" -ForegroundColor $infoColor
         Write-Log -Message "User requested System Restore Point creation attempt."
         try {
-            # Checkpoint-Computer starts the Volume Shadow Copy service itself if needed.
-            Checkpoint-Computer -Description "Before AppBlocker script execution $(Get-Date)" -ErrorAction Stop
-            Write-Host "System Restore Point created successfully." -ForegroundColor $successColor
-            Write-Log -Message "System Restore Point created successfully."
-            $restorePointCreated = $true
+            # Checkpoint-Computer starts the Volume Shadow Copy service itself if needed. Windows
+            # creates at most one restore point per 24 hours by default; within that window the
+            # cmdlet only writes a warning and creates nothing, so the warning is checked here.
+            $restoreWarnings = @()
+            Checkpoint-Computer -Description "Before AppBlocker script execution $(Get-Date)" -ErrorAction Stop -WarningAction SilentlyContinue -WarningVariable restoreWarnings
+            if ($restoreWarnings.Count -gt 0) {
+                $warnMsg = "No new System Restore Point was created: $($restoreWarnings[0].Message)"
+                Write-Warning $warnMsg
+                Write-Log -Message $warnMsg -Level "WARN"
+            } else {
+                Write-Host "System Restore Point created successfully." -ForegroundColor $successColor
+                Write-Log -Message "System Restore Point created successfully."
+            }
         } catch {
             $errMsg = "Failed to create System Restore Point. Error: $($_.Exception.Message). Please ensure System Restore is enabled and functional for your system drive (VSS service might be disabled or unable to start)."
             Write-Warning $errMsg
