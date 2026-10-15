@@ -19,7 +19,7 @@ You need Windows 10 or 11 and an administrator account.
    ```
 
    `-ExecutionPolicy Bypass` lets this one run start; it changes no setting on your computer.
-4. The script offers to create a System Restore Point (optional), then shows its menu:
+4. The script offers to back up your current firewall rules (recommended), then shows its menu:
 
 | Option | What it does |
 | --- | --- |
@@ -49,10 +49,6 @@ the application's number.
 Entering the application's name and folder:
 ![Entering the application's name and folder](images/5-entering-directory-path.png)
 
-The optional restore point prompt, and the restore point in System Restore:
-![Restore point prompt](images/2-asking-for-system-restore-point.png)
-![Restore point listed in System Restore](images/3-system-restore.png)
-
 Option 3 opens Windows Firewall with Advanced Security:
 ![Windows Firewall with Advanced Security](images/4-firewall-service.png)
 
@@ -71,9 +67,10 @@ Windows Firewall matches a rule to the program file of the process that opens a 
 an `.exe`. The script adds two block rules, inbound and outbound, for each `.exe` in the folder. DLL
 files run inside those programs, so they need no rules of their own.
 
-- **Only firewall rules change.** Option 2 removes everything the script added, so the restore point
-  is a precaution, not a requirement. Windows creates at most one such restore point every 24 hours;
-  when it skips one, the script says so.
+- **Only firewall rules change.** Option 2 removes everything the script added. The backup is for
+  anything else that goes wrong: it is saved next to the script as `FirewallBackup-<date>-<time>.wfw`,
+  and `netsh advfirewall import "<that file>"` (as administrator) restores it. Importing replaces all
+  current firewall rules with the backed-up ones, including rules other programs added since.
 - **Logging:** every action and error goes to `AppBlocker.log` next to the script.
 - **Limit:** an application that goes online through another program, such as a browser it opens or an
   updater installed in a different folder, needs that program blocked as well.
