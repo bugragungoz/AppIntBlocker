@@ -44,7 +44,7 @@ function Write-Log {
         [ValidateSet("INFO", "WARN", "ERROR", "DEBUG")]
         [string]$Level = "INFO"
     )
-    
+
     $logEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [$Level] $Message"
     try {
         Add-Content -Path $LogFilePath -Value $logEntry -ErrorAction Stop
@@ -65,7 +65,7 @@ function Create-FirewallRule {
         [ValidateSet("Inbound", "Outbound")]
         [string]$Direction
     )
-    
+
     # Check if a rule with this exact name already exists
     if (Get-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue) {
         $logMsg = "Skipping: Rule '$DisplayName' already exists for '$FilePath'."
@@ -94,13 +94,13 @@ function Remove-ExistingRules {
         [Parameter(Mandatory=$true)]
         [string]$ApplicationName # Used to build the display name pattern
     )
-    
+
     # Use the consistent prefix and the specific app name
-    $rulePattern = "$($RuleNamePrefix)$($ApplicationName) - *" 
+    $rulePattern = "$($RuleNamePrefix)$($ApplicationName) - *"
     Write-Host "`nChecking for existing rules matching '$rulePattern'..." -ForegroundColor $infoColor
     Write-Log -Message "Checking for existing rules matching pattern '$rulePattern'."
-    
-    $existingRules = @() 
+
+    $existingRules = @()
     try {
         # Use DisplayName filter directly for efficiency if possible, otherwise pipe Where-Object
         $existingRules = Get-NetFirewallRule -DisplayName "$rulePattern" -ErrorAction SilentlyContinue
@@ -111,16 +111,16 @@ function Remove-ExistingRules {
          $errMsg = "An error occurred while retrieving firewall rules: $($_.Exception.Message)"
          Write-Warning $errMsg
          Write-Log -Message $errMsg -Level "ERROR"
-         return $false 
+         return $false
     }
 
     $ruleCount = $existingRules.Count
-    
+
     if ($ruleCount -gt 0) {
         Write-Host "Found $ruleCount existing rule(s) for '$ApplicationName'." -ForegroundColor $warningColor
         Write-Log -Message "Found $ruleCount existing rules for '$ApplicationName'."
         $removeChoice = Read-Host -Prompt "Do you want to remove these rules before creating new ones? (Y/N)"
-        
+
         if ($removeChoice -match '^y') {
             Write-Host "Removing $ruleCount existing rule(s)..." -ForegroundColor $infoColor
             Write-Log -Message "User chose to remove $ruleCount existing rules for '$ApplicationName'."
@@ -156,11 +156,11 @@ function Block-ApplicationFiles {
         [string]$ApplicationPath,
         [Parameter(Mandatory=$true)]
         [string]$ApplicationName, # This name is used in the rule DisplayName
-        [string[]]$FileExtensions = @("*.exe", "*.dll"), 
+        [string[]]$FileExtensions = @("*.exe", "*.dll"),
         [string[]]$ExcludedKeywords = @(),
         [string[]]$ExcludedFiles = @()
     )
-    
+
     Write-Log -Message "Starting blocking process for App: '$ApplicationName', Path: '$ApplicationPath', Ext: $($FileExtensions -join ', '), ExcludedKeywords: $($ExcludedKeywords -join ', '), ExcludedFiles: $($ExcludedFiles -join ', ')"
 
     # Validate the directory path
@@ -170,10 +170,10 @@ function Block-ApplicationFiles {
         Write-Log -Message $errMsg -Level "ERROR"
         return $false
     }
-    
+
     Write-Host "`nScanning directory '$ApplicationPath' (and subdirectories)..." -ForegroundColor $infoColor
     Write-Host "File extensions to block: $($FileExtensions -join ', ')" -ForegroundColor $infoColor
-    
+
     $filesToProcess = @()
     try {
         foreach ($ext in $FileExtensions) {
@@ -184,23 +184,23 @@ function Block-ApplicationFiles {
          $errMsg = "An error occurred during file scanning in '$ApplicationPath': $($_.Exception.Message)"
          Write-Warning $errMsg
          Write-Log -Message $errMsg -Level "ERROR"
-         return $false 
+         return $false
     }
 
     if ($filesToProcess.Count -eq 0) {
         $warnMsg = "No files matching the specified extensions found in '$ApplicationPath'."
         Write-Warning $warnMsg
         Write-Log -Message $warnMsg -Level "WARN"
-        return $true 
+        return $true
     }
 
     Write-Host "Found $($filesToProcess.Count) total matching file(s)." -ForegroundColor $infoColor
     Write-Log -Message "Found $($filesToProcess.Count) potential files to process for '$ApplicationName'."
-    
+
     # Filter files based on exclusions
     $filesToBlock = @()
     $filesToSkip = @()
-    
+
     foreach ($file in $filesToProcess) {
         $shouldSkip = $false
         if ($ExcludedFiles -contains $file.Name) {
@@ -212,13 +212,13 @@ function Block-ApplicationFiles {
                 if ($file.Name -like "*$keyword*") {
                     $shouldSkip = $true
                     Write-Log -Message "Skipping file '$($file.Name)' due to keyword '$keyword' exclusion." -Level "DEBUG"
-                    break 
+                    break
                 }
             }
         }
         if ($shouldSkip) { $filesToSkip += $file } else { $filesToBlock += $file }
     }
-    
+
     Write-Host "Files to block after exclusions: $($filesToBlock.Count)" -ForegroundColor $infoColor
     if ($filesToSkip.Count -gt 0) { Write-Host "Files skipped due to exclusions: $($filesToSkip.Count)" -ForegroundColor $infoColor }
     Write-Log -Message "Files to block for '$ApplicationName': $($filesToBlock.Count). Files skipped: $($filesToSkip.Count)."
@@ -231,35 +231,35 @@ function Block-ApplicationFiles {
              Write-Host "`nSkipped files:" -ForegroundColor $infoColor
              $filesToSkip | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor $processColor }
         }
-        return $true 
+        return $true
     }
-    
+
     # --- Create Firewall Rules ---
     $totalFilesToBlock = $filesToBlock.Count
     $currentFileIndex = 0
-    $successRuleCount = 0 
-    $errorFileCount = 0   
+    $successRuleCount = 0
+    $errorFileCount = 0
 
     Write-Host "`nCreating firewall rules..." -ForegroundColor $infoColor
     Write-Log -Message "Starting firewall rule creation for $($filesToBlock.Count) files for '$ApplicationName'."
-    
+
     foreach ($file in $filesToBlock) {
         $currentFileIndex++
         $percentComplete = [math]::Round(($currentFileIndex / $totalFilesToBlock) * 100)
         Write-Progress -Activity "Creating rules for '$($ApplicationName)'" -Status "$percentComplete% Complete" -PercentComplete $percentComplete -CurrentOperation "Processing: $($file.Name)"
-        
+
         # Use the consistent prefix + App Name + File Name
         $baseRuleName = "$($RuleNamePrefix)$($ApplicationName) - $($file.Name)"
         if ($baseRuleName.Length -gt 220) { $baseRuleName = $baseRuleName.Substring(0, 220) + "..." }
 
         Write-Host "Processing: $($file.FullName)" -ForegroundColor $processColor
-        
+
         $inboundRuleName = "$($baseRuleName) (Inbound)"
         $inboundSuccess = Create-FirewallRule -FilePath $file.FullName -DisplayName $inboundRuleName -Direction "Inbound"
-        
+
         $outboundRuleName = "$($baseRuleName) (Outbound)"
         $outboundSuccess = Create-FirewallRule -FilePath $file.FullName -DisplayName $outboundRuleName -Direction "Outbound"
-        
+
         if ($inboundSuccess -and $outboundSuccess) {
             $successRuleCount++
         } else {
@@ -268,32 +268,32 @@ function Block-ApplicationFiles {
             # Specific errors logged within Create-FirewallRule
         }
     }
-    
+
     Write-Progress -Activity "Creating rules for '$($ApplicationName)'" -Completed
-    
+
     $summaryMsg = "Operation completed for '$ApplicationName'. Successfully created rule pairs for $successRuleCount file(s)."
     Write-Host "`n$summaryMsg" -ForegroundColor $successColor
     Write-Log -Message $summaryMsg -Level "INFO"
-    
+
     if ($errorFileCount -gt 0) {
         $warnMsg = "Failed to create one or both rules for $errorFileCount file(s). Check warnings/log for details."
         Write-Warning "  $warnMsg"
         Write-Log -Message $warnMsg -Level "WARN"
     }
-    
+
     if ($filesToSkip.Count -gt 0) {
         Write-Host "`nThe following files were skipped based on exclusion criteria:" -ForegroundColor $infoColor
         $filesToSkip | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor $processColor }
     }
-    
-    return $true 
+
+    return $true
 }
 
 # Function to manage (list and remove) firewall rules created by this script
 function Manage-FirewallRules {
     Write-Host "`n--- Manage Firewall Rules ---" -ForegroundColor $titleColor
     Write-Log -Message "Entered rule management function."
-    
+
     $rulePattern = "$($RuleNamePrefix)*" # Find all rules starting with our prefix
     Write-Host "Searching for firewall rules created by this script (pattern: '$rulePattern')..." -ForegroundColor $infoColor
 
@@ -315,10 +315,10 @@ function Manage-FirewallRules {
     }
 
     Write-Host "Found $($scriptRules.Count) firewall rule(s) created by this script:" -ForegroundColor $successColor
-    
+
     # Group rules by Application Name (extracted from DisplayName)
-    $groupedRules = $scriptRules | Group-Object { 
-        if ($_.DisplayName -match "^$([regex]::Escape($RuleNamePrefix))(.*?)\s+-") { $matches[1] } else { "Unknown Application" } 
+    $groupedRules = $scriptRules | Group-Object {
+        if ($_.DisplayName -match "^$([regex]::Escape($RuleNamePrefix))(.*?)\s+-") { $matches[1] } else { "Unknown Application" }
     }
 
     $appIndex = 1
@@ -356,7 +356,7 @@ function Manage-FirewallRules {
             if ($appMap.ContainsKey([int]$appChoice)) {
                 $appNameToRemove = $appMap[[int]$appChoice]
                 $rulesToRemove = $scriptRules | Where-Object { $_.DisplayName -match "^$([regex]::Escape($RuleNamePrefix))$([regex]::Escape($appNameToRemove))\s+-" }
-                
+
                 if ($rulesToRemove.Count -gt 0) {
                     Write-Host "`nRemoving $($rulesToRemove.Count) rules for application '$appNameToRemove'..." -ForegroundColor $warningColor
                     Write-Log -Message "User chose to remove $($rulesToRemove.Count) rules for application '$appNameToRemove'."
@@ -407,24 +407,23 @@ try {
     Write-Host "YOU ARE SOLELY RESPONSIBLE FOR YOUR USE OF THIS SCRIPT." -ForegroundColor $warningColor
     Write-Host "---------------------------------------------------------------" -ForegroundColor $infoColor
 
-        # --- Sistem Geri Yükleme Noktasý Oluþturma Teklifi ---
+    # --- Offer to create a System Restore Point ---
     $restorePointCreated = $false
     $askCreateRestorePoint = Read-Host -Prompt "Do you want to ATTEMPT creating a System Restore Point before proceeding? (Recommended: Y/N)"
     if ($askCreateRestorePoint -match '^y') {
         Write-Host "Attempting to create System Restore Point... (this may take a moment)" -ForegroundColor $infoColor
         Write-Log -Message "User requested System Restore Point creation attempt."
         try {
-            # Doðrudan Checkpoint-Computer'ý dene. VSS gerekiyorsa kendi baþlatacaktýr.
+            # Checkpoint-Computer starts the Volume Shadow Copy service itself if needed.
             Checkpoint-Computer -Description "Before AppBlocker script execution $(Get-Date)" -ErrorAction Stop
             Write-Host "System Restore Point created successfully." -ForegroundColor $successColor
             Write-Log -Message "System Restore Point created successfully."
             $restorePointCreated = $true
         } catch {
-            # Checkpoint-Computer baþarýsýz olursa hatayý yakala
             $errMsg = "Failed to create System Restore Point. Error: $($_.Exception.Message). Please ensure System Restore is enabled and functional for your system drive (VSS service might be disabled or unable to start)."
             Write-Warning $errMsg
             Write-Log -Message $errMsg -Level "ERROR"
-            # Baþarýsýz olsa bile kullanýcýya devam etme seçeneði sun
+            # Let the user continue even without a restore point
             $continueAnyway = Read-Host -Prompt "Could not create restore point. Continue with the script anyway? (Y/N)"
             if (-not ($continueAnyway -match '^y')) {
                  Write-Log -Message "User chose to exit after failed restore point creation."
@@ -436,7 +435,7 @@ try {
          Write-Host "Skipping System Restore Point creation." -ForegroundColor $warningColor
          Write-Log -Message "User skipped System Restore Point creation."
     }
-    # --- Bitiþ: Sistem Geri Yükleme Noktasý ---
+    # --- End: System Restore Point ---
 
 
     # --- Main Menu Loop ---
@@ -447,7 +446,7 @@ try {
         Write-Host "2. Manage/Remove Existing Firewall Rules" -ForegroundColor $menuColor
         Write-Host "3. Open Windows Firewall with Advanced Security (wf.msc)" -ForegroundColor $menuColor
         Write-Host "4. Exit" -ForegroundColor $menuColor
-        
+
         $choice = Read-Host -Prompt "Enter your choice (1-4)"
         Write-Log -Message "User selected main menu option: $choice"
 
@@ -456,26 +455,26 @@ try {
                 # --- Get User Input for Blocking ---
                 Write-Host "`n--- Block Application ---" -ForegroundColor $titleColor
                 Write-Host "Please provide details for the application you want to block:" -ForegroundColor $infoColor
-                
+
                 $inputAppName = ""
                 while (-not $inputAppName) {
                     $inputAppName = Read-Host -Prompt " Enter a unique name for this application (e.g., 'My Drawing App')"
                     if (-not $inputAppName) { Write-Warning "Application name cannot be empty." }
                 }
-                
+
                 $inputAppPath = ""
                 while (-not $inputAppPath -or -not (Test-Path -Path $inputAppPath -PathType Container)) {
                     $inputAppPath = Read-Host -Prompt " Enter the main installation directory path (e.g., C:\Program Files\MyApp)"
-                    if (-not $inputAppPath) { Write-Warning "Directory path cannot be empty." } 
+                    if (-not $inputAppPath) { Write-Warning "Directory path cannot be empty." }
                     elseif (-not (Test-Path -Path $inputAppPath -PathType Container)) { Write-Warning "Path '$inputAppPath' not found or is not a directory." }
                 }
-                
+
                 $defaultExtensions = "*.exe,*.dll"
                 $extensionsInput = Read-Host -Prompt " Enter file extensions to block (default: $defaultExtensions), separate with commas, or press Enter"
-                $inputFileExtensions = @("*.exe", "*.dll") 
+                $inputFileExtensions = @("*.exe", "*.dll")
                 if ($extensionsInput.Trim()) {
-                    $parsedExtensions = $extensionsInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -like '*.*' } 
-                    if ($parsedExtensions.Count -gt 0) { $inputFileExtensions = $parsedExtensions } 
+                    $parsedExtensions = $extensionsInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -like '*.*' }
+                    if ($parsedExtensions.Count -gt 0) { $inputFileExtensions = $parsedExtensions }
                     else { Write-Warning "Invalid format. Using default extensions ($defaultExtensions)." }
                 }
                 Write-Host " Using extensions: $($inputFileExtensions -join ', ')" -ForegroundColor $infoColor
@@ -505,10 +504,8 @@ try {
                 Write-Host "Opening Windows Firewall with Advanced Security (wf.msc)..." -ForegroundColor $infoColor
                 Write-Log -Message "Attempting to open wf.msc."
                 try {
-                    # Invoke-Item yerine Start-Process kullan
-                    Start-Process "wf.msc" -ErrorAction Stop 
+                    Start-Process "wf.msc" -ErrorAction Stop
                 } catch {
-                    # Hata mesajýný biraz daha genel yapalým
                     $errMsg = "Failed to open wf.msc. Ensure the tool is available on your system. Error: $($_.Exception.Message)"
                     Write-Warning $errMsg
                     Write-Log -Message $errMsg -Level "ERROR"
@@ -523,7 +520,7 @@ try {
                 Write-Log -Message "User entered invalid main menu choice: $choice" -Level "WARN"
             }
         } # End Switch
-        
+
         if (-not $exitScript) {
              Write-Host "`nPress Enter to return to the main menu..." -ForegroundColor $promptColor
              Read-Host | Out-Null
@@ -531,7 +528,7 @@ try {
         }
 
     } # End While Loop
-    
+
     Write-Host "`nScript finished." -ForegroundColor $successColor
 
 }
