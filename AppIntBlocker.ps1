@@ -493,8 +493,14 @@ try {
 
                 $inputAppName = ""
                 while (-not $inputAppName) {
-                    $inputAppName = Read-Host -Prompt " Enter a unique name for this application (e.g., 'My Drawing App')"
+                    $inputAppName = (Read-Host -Prompt " Enter a unique name for this application (e.g., 'My Drawing App')").Trim()
                     if (-not $inputAppName) { Write-Warning "Application name cannot be empty." }
+                    elseif ($inputAppName -match '\s-') {
+                        # Rule names separate the application from the file with " - ". A name like
+                        # "Demo - Beta" would be read as "Demo", so removing Demo's rules removed both.
+                        Write-Warning "Application name cannot contain ' -' (a space followed by a hyphen)."
+                        $inputAppName = ""
+                    }
                 }
 
                 $inputAppPath = ""
