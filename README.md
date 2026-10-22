@@ -71,9 +71,20 @@ files run inside those programs, so they need no rules of their own.
   anything else that goes wrong: it is saved next to the script as `FirewallBackup-<date>-<time>.wfw`,
   and `netsh advfirewall import "<that file>"` (as administrator) restores it. Importing replaces all
   current firewall rules with the backed-up ones, including rules other programs added since.
+- **Rule names:** `AppBlocker Rule -<name> - <path inside the folder> (Inbound)` and `(Outbound)`. A
+  name longer than 220 characters is cut and ends in a short hash of the whole name, so every program
+  keeps its own rules. [AppIntBlockerGUI](https://github.com/bugragungoz/AppIntBlockerGUI) and
+  [netSwitch](https://github.com/bugragungoz/netswitch) write the same names, so each of them can
+  see and remove the rules the others added.
 - **Logging:** every action and error goes to `AppBlocker.log` next to the script.
 - **Limit:** an application that goes online through another program, such as a browser it opens or an
   updater installed in a different folder, needs that program blocked as well.
+
+## Tests
+
+`tests/AppIntBlocker.Tests.ps1` checks the script's functions with Pester against a firewall kept in
+memory, so running the tests changes no real rule. GitHub Actions runs them, and PSScriptAnalyzer, in
+Windows PowerShell 5.1 and PowerShell 7 on every push.
 
 ## Disclaimer
 
