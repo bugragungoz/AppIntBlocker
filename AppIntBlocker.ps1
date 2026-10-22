@@ -239,7 +239,8 @@ function Block-Application {
         }
         if (-not $shouldSkip -and $ExcludedKeywords.Count -gt 0) {
             foreach ($keyword in $ExcludedKeywords) {
-                if ($file.Name -like "*$keyword*") {
+                # Plain text, not a wildcard: a keyword like "[beta]" would match any b, e, t or a.
+                if ($file.Name.IndexOf($keyword, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
                     $shouldSkip = $true
                     Write-ScriptLog -Message "Skipping file '$($file.Name)' due to keyword '$keyword' exclusion." -Level "DEBUG"
                     break

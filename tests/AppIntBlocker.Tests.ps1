@@ -94,6 +94,15 @@ Describe 'AppIntBlocker.ps1' {
             $script:Rules.Count | Should -Be 2
         }
 
+        It 'skips excluded files and keywords, reading a keyword as plain text' {
+            $app = New-AppFolder 'Excl' @('main.exe', 'updater.exe', 'tool[beta].exe', 'crash.exe')
+
+            Block-Application -ApplicationPath $app -ApplicationName 'Excl' -ExcludedKeywords @('update', '[beta]') -ExcludedFiles @('CRASH.EXE') 6>$null 3>$null
+
+            # "[beta]" used to be a wildcard for any one of b, e, t, a, so it excluded main.exe as well.
+            Get-RuleName | Should -Be @('AppBlocker Rule -Excl - main.exe (Inbound)', 'AppBlocker Rule -Excl - main.exe (Outbound)')
+        }
+
         It 'goes on after a rule the firewall refuses' {
             $app = New-AppFolder 'Partly' @('a.exe', 'b.exe')
             $script:Refused = @('AppBlocker Rule -Partly - a.exe (Inbound)')
