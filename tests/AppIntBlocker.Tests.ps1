@@ -1,4 +1,4 @@
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.5.0' }
+﻿#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.5.0' }
 
 # Tests the functions of AppIntBlocker.ps1 against a firewall kept in memory. The script itself is
 # an interactive menu that needs administrator rights, so the tests load only its settings and its
@@ -94,6 +94,30 @@ Describe 'AppIntBlocker.ps1' {
             $script:Rules.Count | Should -Be 2
         }
 
+        It 'gives two files whose names agree past the cut their own rules' {
+            # Rule names are cut at 220 characters. Two programs in the same deep folder used to get the
+            # same name, so the second was skipped as "already there" and never blocked.
+            $deep = 'd' * 105
+            $app = New-AppFolder 'Long' @("$deep\first.exe", "$deep\second.exe")
+            $name = 'A' * 100
+
+            Block-Application -ApplicationPath $app -ApplicationName $name 6>$null 3>$null
+
+            $script:Rules.Count | Should -Be 4
+            @($script:Rules.DisplayName | Select-Object -Unique).Count | Should -Be 4
+            @($script:Rules | Where-Object Program -like '*second.exe').Count | Should -Be 2
+            $script:Rules.DisplayName | ForEach-Object { $_.Length | Should -BeLessOrEqual 234 }
+        }
+
+        It 'names a cut rule the same way every time, so a second run adds nothing' {
+            $deep = 'e' * 105
+            $app = New-AppFolder 'LongAgain' @("$deep\first.exe", "$deep\second.exe")
+            $name = 'B' * 100
+            Block-Application -ApplicationPath $app -ApplicationName $name 6>$null 3>$null
+            Block-Application -ApplicationPath $app -ApplicationName $name 6>$null 3>$null
+            $script:Rules.Count | Should -Be 4
+        }
+
         It 'skips excluded files and keywords, reading a keyword as plain text' {
             $app = New-AppFolder 'Excl' @('main.exe', 'updater.exe', 'tool[beta].exe', 'crash.exe')
 
@@ -115,6 +139,20 @@ Describe 'AppIntBlocker.ps1' {
         It 'changes nothing for a folder that does not exist' {
             Block-Application -ApplicationPath (Join-Path $TestDrive 'missing') -ApplicationName 'Missing' 6>$null 3>$null
             $script:Rules.Count | Should -Be 0
+        }
+    }
+
+    Describe 'Get-RuleBaseName' {
+        It 'keeps a name of up to 220 characters as it is' {
+            Get-RuleBaseName -ApplicationName 'Demo' -RelativePath 'bin\demo.exe' | Should -Be 'AppBlocker Rule -Demo - bin\demo.exe'
+        }
+
+        It 'cuts a longer name to 211 characters and adds a hash of the whole name' {
+            # The same vectors are in AppIntBlockerGUI's tests: both tools must name a file alike.
+            $name = Get-RuleBaseName -ApplicationName ('A' * 100) -RelativePath (('d' * 105) + '\first.exe')
+            $name | Should -Be ('AppBlocker Rule -' + ('A' * 100) + ' - ' + ('d' * 91) + '~f27b9649...')
+            $name.Length | Should -Be 223
+            (Get-RuleBaseName -ApplicationName 'Çizim Programı' -RelativePath (('ş' * 200) + '.exe')) | Should -BeLike '*~32bea83b...'
         }
     }
 

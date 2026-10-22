@@ -95,6 +95,31 @@ function Backup-FirewallPolicy {
     Write-ScriptLog -Message $errMsg -Level "ERROR"
 }
 
+# The part of a rule name before " (Inbound)" or " (Outbound)": the prefix, the application and the
+# file's path inside its folder. A name over 220 characters is cut, and a short hash of the whole
+# name goes before the "...", so two files whose paths only differ past the cut keep their own
+# rules, and the same file gets the same name every time. AppIntBlockerGUI names rules the same way.
+function Get-RuleBaseName {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$ApplicationName,
+        [Parameter(Mandatory=$true)]
+        [string]$RelativePath
+    )
+
+    $baseName = "$($RuleNamePrefix)$($ApplicationName) - $RelativePath"
+    if ($baseName.Length -le 220) { return $baseName }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($baseName))
+    }
+    finally {
+        $sha.Dispose()
+    }
+    $hash = -join ($digest[0..3] | ForEach-Object { $_.ToString('x2') })
+    return $baseName.Substring(0, 211) + "~$hash..."
+}
+
 # Creates a Windows Firewall rule for a specific file
 function New-BlockRule {
     [CmdletBinding(SupportsShouldProcess)]
@@ -291,8 +316,7 @@ function Block-Application {
         if ($file.FullName.StartsWith($rootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
             $relativePath = $file.FullName.Substring($rootPath.Length).TrimStart('\', '/')
         }
-        $baseRuleName = "$($RuleNamePrefix)$($ApplicationName) - $relativePath"
-        if ($baseRuleName.Length -gt 220) { $baseRuleName = $baseRuleName.Substring(0, 220) + "..." }
+        $baseRuleName = Get-RuleBaseName -ApplicationName $ApplicationName -RelativePath $relativePath
 
         Write-Host "Processing: $($file.FullName)" -ForegroundColor $processColor
 
