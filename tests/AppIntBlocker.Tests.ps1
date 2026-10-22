@@ -29,11 +29,13 @@ BeforeAll {
     $script:Rules = [System.Collections.Generic.List[object]]::new()
     $script:Refused = @()
     function Get-NetFirewallRule {
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Justification = 'Stands in for the firewall cmdlet so no real rule is touched.')]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Rest', Justification = 'Takes the arguments the stand-in ignores.')]
         param([string]$DisplayName = '*', [Parameter(ValueFromRemainingArguments)]$Rest)
         @($script:Rules | Where-Object { $_.DisplayName -like $DisplayName })
     }
     function New-NetFirewallRule {
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Justification = 'Stands in for the firewall cmdlet so no real rule is touched.')]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Rest', Justification = 'Takes the arguments the stand-in ignores.')]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'A stand-in for the cmdlet; it changes a list in memory.')]
         param([string]$DisplayName, [string]$Direction, [string]$Program, [Parameter(ValueFromRemainingArguments)]$Rest)
@@ -43,6 +45,7 @@ BeforeAll {
         $rule
     }
     function Remove-NetFirewallRule {
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidOverwritingBuiltInCmdlets', '', Justification = 'Stands in for the firewall cmdlet so no real rule is touched.')]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Rest', Justification = 'Takes the arguments the stand-in ignores.')]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'A stand-in for the cmdlet; it changes a list in memory.')]
         param([Parameter(ValueFromPipeline)]$InputObject, [Parameter(ValueFromRemainingArguments)]$Rest)
