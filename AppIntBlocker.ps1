@@ -41,8 +41,8 @@ $promptColor = "Magenta"
 
 # --- Functions ---
 
-# Function to write messages to a log file
-function Write-Log {
+# Writes a line to the log file next to the script
+function Write-ScriptLog {
     param (
         [Parameter(Mandatory=$true)]
         [string]$Message,
@@ -83,7 +83,7 @@ function Backup-FirewallPolicy {
     try {
         $netshOutput = & netsh.exe advfirewall export $backupPath 2>&1
         if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $backupPath)) {
-            Write-Log -Message "Firewall policy exported to '$backupPath'."
+            Write-ScriptLog -Message "Firewall policy exported to '$backupPath'."
             return $backupPath
         }
         $errMsg = "Failed to back up the firewall rules to '$backupPath'. netsh said: $(($netshOutput | Out-String).Trim())"
@@ -92,11 +92,12 @@ function Backup-FirewallPolicy {
         $errMsg = "Failed to back up the firewall rules to '$backupPath'. Error: $($_.Exception.Message)"
     }
     Write-Warning $errMsg
-    Write-Log -Message $errMsg -Level "ERROR"
+    Write-ScriptLog -Message $errMsg -Level "ERROR"
 }
 
 # Creates a Windows Firewall rule for a specific file
 function New-BlockRule {
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [Parameter(Mandatory=$true)]
         [string]$FilePath,
@@ -107,22 +108,24 @@ function New-BlockRule {
         [string]$Direction
     )
 
+    if (-not $PSCmdlet.ShouldProcess($FilePath, "Block $Direction traffic")) { return $false }
     try {
         New-NetFirewallRule -DisplayName $DisplayName -Direction $Direction -Program $FilePath -Action Block -Profile Any -Enabled True -ErrorAction Stop | Out-Null
         $logMsg = "Successfully created rule '$DisplayName' for '$FilePath'."
-        Write-Log -Message $logMsg -Level "INFO"
+        Write-ScriptLog -Message $logMsg -Level "INFO"
         return $true
     }
     catch {
         $errMsg = "Failed to create rule '$DisplayName' for '$FilePath'. Error: $($_.Exception.Message)"
         Write-Warning "  $errMsg"
-        Write-Log -Message $errMsg -Level "ERROR"
+        Write-ScriptLog -Message $errMsg -Level "ERROR"
         return $false
     }
 }
 
 # Removes existing firewall rules matching the application name pattern
 function Remove-ExistingRule {
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [Parameter(Mandatory=$true)]
         [string]$ApplicationName # Used to build the display name pattern
@@ -131,7 +134,7 @@ function Remove-ExistingRule {
     # Use the consistent prefix and the specific app name
     $rulePattern = "$($RuleNamePrefix)$($ApplicationName) - *"
     Write-Host "`nChecking for existing rules matching '$rulePattern'..." -ForegroundColor $infoColor
-    Write-Log -Message "Checking for existing rules matching pattern '$rulePattern'."
+    Write-ScriptLog -Message "Checking for existing rules matching pattern '$rulePattern'."
 
     $existingRules = @()
     try {
@@ -140,7 +143,7 @@ function Remove-ExistingRule {
     catch {
          $errMsg = "An error occurred while retrieving firewall rules: $($_.Exception.Message)"
          Write-Warning $errMsg
-         Write-Log -Message $errMsg -Level "ERROR"
+         Write-ScriptLog -Message $errMsg -Level "ERROR"
          return
     }
 
@@ -148,33 +151,33 @@ function Remove-ExistingRule {
 
     if ($ruleCount -gt 0) {
         Write-Host "Found $ruleCount existing rule(s) for '$ApplicationName'." -ForegroundColor $warningColor
-        Write-Log -Message "Found $ruleCount existing rules for '$ApplicationName'."
+        Write-ScriptLog -Message "Found $ruleCount existing rules for '$ApplicationName'."
         $removeChoice = Read-Host -Prompt "Do you want to remove these rules before creating new ones? (Y/N)"
 
-        if ($removeChoice -match '^y') {
+        if ($removeChoice -match '^y' -and $PSCmdlet.ShouldProcess($ApplicationName, "Remove $ruleCount firewall rule(s)")) {
             Write-Host "Removing $ruleCount existing rule(s)..." -ForegroundColor $infoColor
-            Write-Log -Message "User chose to remove $ruleCount existing rules for '$ApplicationName'."
+            Write-ScriptLog -Message "User chose to remove $ruleCount existing rules for '$ApplicationName'."
             try {
                 $existingRules | Remove-NetFirewallRule -ErrorAction Stop
                 Write-Host "Successfully removed $ruleCount rule(s)." -ForegroundColor $successColor
-                Write-Log -Message "Successfully removed $ruleCount rules for '$ApplicationName'."
+                Write-ScriptLog -Message "Successfully removed $ruleCount rules for '$ApplicationName'."
                 return
             }
             catch {
                  $errMsg = "An error occurred while removing rules for '$ApplicationName': $($_.Exception.Message)"
                  Write-Warning $errMsg
-                 Write-Log -Message $errMsg -Level "ERROR"
+                 Write-ScriptLog -Message $errMsg -Level "ERROR"
                  Write-Warning "Some rules might not have been removed. Please check Windows Firewall manually."
                  return
             }
         } else {
             Write-Host "Keeping existing rules." -ForegroundColor $warningColor
-            Write-Log -Message "User chose to keep existing rules for '$ApplicationName'."
+            Write-ScriptLog -Message "User chose to keep existing rules for '$ApplicationName'."
             return
         }
     } else {
         Write-Host "No existing rules found matching the pattern for '$ApplicationName'." -ForegroundColor $infoColor
-        Write-Log -Message "No existing rules found for '$ApplicationName'."
+        Write-ScriptLog -Message "No existing rules found for '$ApplicationName'."
         return
     }
 }
@@ -190,13 +193,13 @@ function Block-Application {
         [string[]]$ExcludedFiles = @()
     )
 
-    Write-Log -Message "Starting blocking process for App: '$ApplicationName', Path: '$ApplicationPath', ExcludedKeywords: $($ExcludedKeywords -join ', '), ExcludedFiles: $($ExcludedFiles -join ', ')"
+    Write-ScriptLog -Message "Starting blocking process for App: '$ApplicationName', Path: '$ApplicationPath', ExcludedKeywords: $($ExcludedKeywords -join ', '), ExcludedFiles: $($ExcludedFiles -join ', ')"
 
     # Validate the directory path
     if (-not (Test-Path -LiteralPath $ApplicationPath -PathType Container)) {
         $errMsg = "ERROR: The specified path '$ApplicationPath' was not found or is not a valid directory."
         Write-Host $errMsg -ForegroundColor $errorColor
-        Write-Log -Message $errMsg -Level "ERROR"
+        Write-ScriptLog -Message $errMsg -Level "ERROR"
         return
     }
 
@@ -210,19 +213,19 @@ function Block-Application {
     catch {
          $errMsg = "An error occurred during file scanning in '$ApplicationPath': $($_.Exception.Message)"
          Write-Warning $errMsg
-         Write-Log -Message $errMsg -Level "ERROR"
+         Write-ScriptLog -Message $errMsg -Level "ERROR"
          return
     }
 
     if ($filesToProcess.Count -eq 0) {
         $warnMsg = "No .exe files found in '$ApplicationPath'."
         Write-Warning $warnMsg
-        Write-Log -Message $warnMsg -Level "WARN"
+        Write-ScriptLog -Message $warnMsg -Level "WARN"
         return
     }
 
     Write-Host "Found $($filesToProcess.Count) .exe file(s)." -ForegroundColor $infoColor
-    Write-Log -Message "Found $($filesToProcess.Count) potential files to process for '$ApplicationName'."
+    Write-ScriptLog -Message "Found $($filesToProcess.Count) potential files to process for '$ApplicationName'."
 
     # Filter files based on exclusions
     $filesToBlock = @()
@@ -232,13 +235,13 @@ function Block-Application {
         $shouldSkip = $false
         if ($ExcludedFiles -contains $file.Name) {
             $shouldSkip = $true
-            Write-Log -Message "Skipping file '$($file.Name)' due to exact filename exclusion." -Level "DEBUG"
+            Write-ScriptLog -Message "Skipping file '$($file.Name)' due to exact filename exclusion." -Level "DEBUG"
         }
         if (-not $shouldSkip -and $ExcludedKeywords.Count -gt 0) {
             foreach ($keyword in $ExcludedKeywords) {
                 if ($file.Name -like "*$keyword*") {
                     $shouldSkip = $true
-                    Write-Log -Message "Skipping file '$($file.Name)' due to keyword '$keyword' exclusion." -Level "DEBUG"
+                    Write-ScriptLog -Message "Skipping file '$($file.Name)' due to keyword '$keyword' exclusion." -Level "DEBUG"
                     break
                 }
             }
@@ -248,12 +251,12 @@ function Block-Application {
 
     Write-Host "Files to block after exclusions: $($filesToBlock.Count)" -ForegroundColor $infoColor
     if ($filesToSkip.Count -gt 0) { Write-Host "Files skipped due to exclusions: $($filesToSkip.Count)" -ForegroundColor $infoColor }
-    Write-Log -Message "Files to block for '$ApplicationName': $($filesToBlock.Count). Files skipped: $($filesToSkip.Count)."
+    Write-ScriptLog -Message "Files to block for '$ApplicationName': $($filesToBlock.Count). Files skipped: $($filesToSkip.Count)."
 
     if ($filesToBlock.Count -eq 0) {
         $warnMsg = "No files remaining to block for '$ApplicationName' after applying exclusions."
         Write-Warning $warnMsg
-        Write-Log -Message $warnMsg -Level "WARN"
+        Write-ScriptLog -Message $warnMsg -Level "WARN"
          if ($filesToSkip.Count -gt 0) {
              Write-Host "`nSkipped files:" -ForegroundColor $infoColor
              $filesToSkip | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor $processColor }
@@ -268,7 +271,7 @@ function Block-Application {
     $errorFileCount = 0
 
     Write-Host "`nCreating firewall rules..." -ForegroundColor $infoColor
-    Write-Log -Message "Starting firewall rule creation for $($filesToBlock.Count) files for '$ApplicationName'."
+    Write-ScriptLog -Message "Starting firewall rule creation for $($filesToBlock.Count) files for '$ApplicationName'."
 
     # Read the application's existing rules once, rather than querying the firewall for every
     # rule name in the loop below
@@ -298,7 +301,7 @@ function Block-Application {
             if ($existingRuleNames.ContainsKey($ruleName)) {
                 $logMsg = "Skipping: Rule '$ruleName' already exists for '$($file.FullName)'."
                 Write-Host "  $logMsg" -ForegroundColor $processColor
-                Write-Log -Message $logMsg -Level "DEBUG"
+                Write-ScriptLog -Message $logMsg -Level "DEBUG"
             }
             elseif (New-BlockRule -FilePath $file.FullName -DisplayName $ruleName -Direction $direction) {
                 $existingRuleNames[$ruleName] = $true
@@ -321,12 +324,12 @@ function Block-Application {
 
     $summaryMsg = "Operation completed for '$ApplicationName'. Successfully created rule pairs for $successRuleCount file(s)."
     Write-Host "`n$summaryMsg" -ForegroundColor $successColor
-    Write-Log -Message $summaryMsg -Level "INFO"
+    Write-ScriptLog -Message $summaryMsg -Level "INFO"
 
     if ($errorFileCount -gt 0) {
         $warnMsg = "Failed to create one or both rules for $errorFileCount file(s). Check warnings/log for details."
         Write-Warning "  $warnMsg"
-        Write-Log -Message $warnMsg -Level "WARN"
+        Write-ScriptLog -Message $warnMsg -Level "WARN"
     }
 
     if ($filesToSkip.Count -gt 0) {
@@ -338,7 +341,7 @@ function Block-Application {
 # Function to manage (list and remove) firewall rules created by this script
 function Show-RuleManager {
     Write-Host "`n--- Manage Firewall Rules ---" -ForegroundColor $titleColor
-    Write-Log -Message "Entered rule management function."
+    Write-ScriptLog -Message "Entered rule management function."
 
     $rulePattern = "$($RuleNamePrefix)*" # Find all rules starting with our prefix
     Write-Host "Searching for firewall rules created by this script (pattern: '$rulePattern')..." -ForegroundColor $infoColor
@@ -350,13 +353,13 @@ function Show-RuleManager {
     catch {
         $errMsg = "Error retrieving firewall rules: $($_.Exception.Message)"
         Write-Warning $errMsg
-        Write-Log -Message $errMsg -Level "ERROR"
+        Write-ScriptLog -Message $errMsg -Level "ERROR"
         return # Exit function if rules can't be retrieved
     }
 
     if ($scriptRules.Count -eq 0) {
         Write-Host "No firewall rules created by this script were found." -ForegroundColor $infoColor
-        Write-Log -Message "No script-created firewall rules found."
+        Write-ScriptLog -Message "No script-created firewall rules found."
         return
     }
 
@@ -386,15 +389,15 @@ function Show-RuleManager {
     switch ($choice.ToUpper()) {
         "A" {
             Write-Host "`nRemoving ALL $($scriptRules.Count) rules created by this script..." -ForegroundColor $warningColor
-            Write-Log -Message "User chose to remove all $($scriptRules.Count) script-created rules."
+            Write-ScriptLog -Message "User chose to remove all $($scriptRules.Count) script-created rules."
             try {
                 $scriptRules | Remove-NetFirewallRule -ErrorAction Stop
                 Write-Host "Successfully removed all rules." -ForegroundColor $successColor
-                Write-Log -Message "Successfully removed all script-created rules."
+                Write-ScriptLog -Message "Successfully removed all script-created rules."
             } catch {
                 $errMsg = "Error removing all rules: $($_.Exception.Message)"
                 Write-Warning $errMsg
-                Write-Log -Message $errMsg -Level "ERROR"
+                Write-ScriptLog -Message $errMsg -Level "ERROR"
             }
         }
         "S" {
@@ -407,32 +410,32 @@ function Show-RuleManager {
 
                 if ($rulesToRemove.Count -gt 0) {
                     Write-Host "`nRemoving $($rulesToRemove.Count) rules for application '$appNameToRemove'..." -ForegroundColor $warningColor
-                    Write-Log -Message "User chose to remove $($rulesToRemove.Count) rules for application '$appNameToRemove'."
+                    Write-ScriptLog -Message "User chose to remove $($rulesToRemove.Count) rules for application '$appNameToRemove'."
                     try {
                         $rulesToRemove | Remove-NetFirewallRule -ErrorAction Stop
                         Write-Host "Successfully removed rules for '$appNameToRemove'." -ForegroundColor $successColor
-                        Write-Log -Message "Successfully removed rules for '$appNameToRemove'."
+                        Write-ScriptLog -Message "Successfully removed rules for '$appNameToRemove'."
                     } catch {
                         $errMsg = "Error removing rules for '$appNameToRemove': $($_.Exception.Message)"
                         Write-Warning $errMsg
-                        Write-Log -Message $errMsg -Level "ERROR"
+                        Write-ScriptLog -Message $errMsg -Level "ERROR"
                     }
                 } else {
                     Write-Warning "No rules found matching the selected application '$appNameToRemove' (this shouldn't happen)."
-                    Write-Log -Message "Rule removal logic error: No rules found for selected app '$appNameToRemove'." -Level "ERROR"
+                    Write-ScriptLog -Message "Rule removal logic error: No rules found for selected app '$appNameToRemove'." -Level "ERROR"
                 }
             } else {
                 Write-Warning "Invalid application number selected."
-                Write-Log -Message "User entered invalid application number '$appChoice' for rule removal." -Level "WARN"
+                Write-ScriptLog -Message "User entered invalid application number '$appChoice' for rule removal." -Level "WARN"
             }
         }
         "C" {
             Write-Host "Rule removal cancelled." -ForegroundColor $infoColor
-            Write-Log -Message "User cancelled rule management."
+            Write-ScriptLog -Message "User cancelled rule management."
         }
         default {
             Write-Warning "Invalid choice."
-            Write-Log -Message "User entered invalid choice '$choice' in rule management." -Level "WARN"
+            Write-ScriptLog -Message "User entered invalid choice '$choice' in rule management." -Level "WARN"
         }
     }
 }
@@ -440,7 +443,7 @@ function Show-RuleManager {
 # --- Main Script Body ---
 
 # Initial log entry
-Write-Log -Message "Script started. PID: $PID"
+Write-ScriptLog -Message "Script started. PID: $PID"
 
 try {
     Clear-Host
@@ -459,7 +462,7 @@ try {
     $askBackup = Read-Host -Prompt "Back up the current Windows Firewall rules before proceeding? (Recommended: Y/N)"
     if ($askBackup -match '^y') {
         Write-Host "Backing up the Windows Firewall rules..." -ForegroundColor $infoColor
-        Write-Log -Message "User requested a firewall backup."
+        Write-ScriptLog -Message "User requested a firewall backup."
         $backupPath = Backup-FirewallPolicy
         if ($backupPath) {
             Write-Host "Firewall rules backed up to: $backupPath" -ForegroundColor $successColor
@@ -469,14 +472,14 @@ try {
             # Let the user continue even without a backup
             $continueAnyway = Read-Host -Prompt "Could not back up the firewall rules. Continue with the script anyway? (Y/N)"
             if (-not ($continueAnyway -match '^y')) {
-                 Write-Log -Message "User chose to exit after the firewall backup failed."
+                 Write-ScriptLog -Message "User chose to exit after the firewall backup failed."
                  exit 1
             }
-            Write-Log -Message "User chose to continue after the firewall backup failed."
+            Write-ScriptLog -Message "User chose to continue after the firewall backup failed."
         }
     } else {
          Write-Host "Skipping firewall backup." -ForegroundColor $warningColor
-         Write-Log -Message "User skipped the firewall backup."
+         Write-ScriptLog -Message "User skipped the firewall backup."
     }
     # --- End: Firewall backup ---
 
@@ -491,7 +494,7 @@ try {
         Write-Host "4. Exit" -ForegroundColor $menuColor
 
         $choice = Read-Host -Prompt "Enter your choice (1-4)"
-        Write-Log -Message "User selected main menu option: $choice"
+        Write-ScriptLog -Message "User selected main menu option: $choice"
 
         switch ($choice) {
             "1" {
@@ -528,9 +531,9 @@ try {
                     $filesInput = Read-Host -Prompt "  Exact filenames to exclude (comma-separated)"
                     if ($filesInput.Trim()) { $inputExcludedFiles = $filesInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } }
                      if ($inputExcludedKeywords.Count -gt 0 -or $inputExcludedFiles.Count -gt 0) { Write-Host " Exclusion rules applied." -ForegroundColor $infoColor }
-                     Write-Log -Message "Exclusions for '$inputAppName': Keywords='$($inputExcludedKeywords -join ',')', Files='$($inputExcludedFiles -join ',')'"
+                     Write-ScriptLog -Message "Exclusions for '$inputAppName': Keywords='$($inputExcludedKeywords -join ',')', Files='$($inputExcludedFiles -join ',')'"
                 } else {
-                    Write-Log -Message "No exclusions specified for '$inputAppName'."
+                    Write-ScriptLog -Message "No exclusions specified for '$inputAppName'."
                 }
 
                 # --- Execute Blocking Process ---
@@ -542,22 +545,22 @@ try {
             }
             "3" {
                 Write-Host "Opening Windows Firewall with Advanced Security (wf.msc)..." -ForegroundColor $infoColor
-                Write-Log -Message "Attempting to open wf.msc."
+                Write-ScriptLog -Message "Attempting to open wf.msc."
                 try {
                     Start-Process "wf.msc" -ErrorAction Stop
                 } catch {
                     $errMsg = "Failed to open wf.msc. Ensure the tool is available on your system. Error: $($_.Exception.Message)"
                     Write-Warning $errMsg
-                    Write-Log -Message $errMsg -Level "ERROR"
+                    Write-ScriptLog -Message $errMsg -Level "ERROR"
                 }
             }
             "4" {
                 $exitScript = $true
-                Write-Log -Message "User chose to exit."
+                Write-ScriptLog -Message "User chose to exit."
             }
             default {
                 Write-Warning "Invalid selection. Please try again."
-                Write-Log -Message "User entered invalid main menu choice: $choice" -Level "WARN"
+                Write-ScriptLog -Message "User entered invalid main menu choice: $choice" -Level "WARN"
             }
         } # End Switch
 
@@ -577,12 +580,12 @@ catch {
     $finalErrorMsg = "AN UNEXPECTED SCRIPT-LEVEL ERROR OCCURRED: $($_.Exception.Message) at $($_.InvocationInfo.ScriptLineNumber)"
     Write-Host "`n$finalErrorMsg" -ForegroundColor $errorColor
     Write-Error $_ # Display the full error record for debugging
-    Write-Log -Message $finalErrorMsg -Level "ERROR"
-    Write-Log -Message "Script terminated due to error."
+    Write-ScriptLog -Message $finalErrorMsg -Level "ERROR"
+    Write-ScriptLog -Message "Script terminated due to error."
 }
 finally {
     # Pause before exiting
-    Write-Log -Message "Script execution ended."
+    Write-ScriptLog -Message "Script execution ended."
     Write-Host "`nPress Enter to exit..." -ForegroundColor $infoColor
     Read-Host | Out-Null
 }
